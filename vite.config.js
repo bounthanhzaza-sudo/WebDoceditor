@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/WebDoceditor/',
+  base: '/',
   server: {
     port: 4173,
     host: true,
