@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 
 import Document from './models/Document.js';
 import Settings from './models/Settings.js';
+import User from './models/User.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -249,4 +250,48 @@ app.post('/api/reset', async (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
+});
+
+// 4. Authentication Endpoints
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Please provide name, email, and password.' });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email is already registered.' });
+    }
+
+    const user = await User.create({ name, email: email.toLowerCase(), password });
+    res.status(201).json({
+      success: true,
+      user: { id: user._id, name: user.name, email: user.email }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Please provide email and password.' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase(), password });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    res.json({
+      success: true,
+      user: { id: user._id, name: user.name, email: user.email }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });

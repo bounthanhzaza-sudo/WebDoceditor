@@ -5,15 +5,35 @@ import { Sidebar } from './components/Sidebar';
 import { WordCanvas } from './components/WordCanvas';
 import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { SettingsModal } from './components/SettingsModal';
+import { LoginModal } from './components/LoginModal';
 
 export function App() {
   const [store, setStore] = useState(() => DocStore.loadStore());
   const [activeDocId, setActiveDocId] = useState(() => store.documents[0]?.id || null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('DOCEDITOR_USER');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Modals state
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('DOCEDITOR_USER', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('DOCEDITOR_USER');
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     DocStore.fetchFromBackend().then(backendStore => {
@@ -140,6 +160,9 @@ export function App() {
         onExport={handleExport}
         onImport={handleImport}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        currentUser={currentUser}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onLogout={() => setCurrentUser(null)}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -175,6 +198,12 @@ export function App() {
         siteTitle={store.siteTitle}
         onUpdateTitle={handleUpdateTitle}
         onReset={handleReset}
+      />
+
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={(user) => setCurrentUser(user)}
       />
     </div>
   );
