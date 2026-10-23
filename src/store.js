@@ -1,4 +1,5 @@
 const STORE_KEY = 'DOCEDITOR_STORE_V1';
+const API_URL = 'http://localhost:5000/api';
 
 export const DEFAULT_CATEGORIES = [
   'Getting Started',
@@ -129,6 +130,59 @@ export const DocStore = {
     } catch (err) {
       console.error('Failed to save to localStorage', err);
     }
+  },
+
+  async fetchFromBackend() {
+    try {
+      const res = await fetch(`${API_URL}/store`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.documents) && Array.isArray(data.categories)) {
+          this.saveStore(data);
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend server not reachable, using local storage cache:', err.message);
+    }
+    return this.loadStore();
+  },
+
+  async syncToBackend(store) {
+    // Always save locally first
+    this.saveStore(store);
+    try {
+      const res = await fetch(`${API_URL}/store`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(store)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.store) {
+          return data.store;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to sync with MongoDB backend:', err.message);
+    }
+    return store;
+  },
+
+  async resetBackend() {
+    try {
+      const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.store) {
+          this.saveStore(data.store);
+          return data.store;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to reset backend, resetting locally:', err.message);
+    }
+    return this.resetToDefault();
   },
 
   resetToDefault() {

@@ -16,7 +16,18 @@ export function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   useEffect(() => {
-    DocStore.saveStore(store);
+    DocStore.fetchFromBackend().then(backendStore => {
+      if (backendStore) {
+        setStore(backendStore);
+        if (!activeDocId && backendStore.documents[0]) {
+          setActiveDocId(backendStore.documents[0].id);
+        }
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    DocStore.syncToBackend(store);
   }, [store]);
 
   const activeDoc = store.documents.find(d => d.id === activeDocId) || store.documents[0] || null;
@@ -97,8 +108,8 @@ export function App() {
     setStore(prev => ({ ...prev, siteTitle: newTitle }));
   };
 
-  const handleReset = () => {
-    const fresh = DocStore.resetToDefault();
+  const handleReset = async () => {
+    const fresh = await DocStore.resetBackend();
     setStore(fresh);
     setActiveDocId(fresh.documents[0]?.id || null);
   };
