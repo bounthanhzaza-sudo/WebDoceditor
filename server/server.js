@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import Document from './models/Document.js';
 import Settings from './models/Settings.js';
 import User from './models/User.js';
+import History from './models/History.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,6 +136,17 @@ async function seedDatabase() {
       await Document.insertMany(DEFAULT_DOCUMENTS);
       console.log('Default documents seeded.');
     }
+
+    const testerName = 'QA Tester';
+    const existingTester = await User.findOne({ name: testerName });
+    if (!existingTester) {
+      await User.create({
+        name: testerName,
+        email: 'tester@doceditor.com',
+        password: 'password123'
+      });
+      console.log('Default Tester ID seeded: QA Tester / password123');
+    }
   } catch (err) {
     console.error('Seeding error:', err);
   }
@@ -255,17 +267,24 @@ app.get('/api/health', (req, res) => {
 // 4. Authentication Endpoints
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Please provide name, email, and password.' });
+    const { name, password } = req.body;
+    if (!name || !password) {
+      return res.status(400).json({ error: 'Please provide name and password.' });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({ name: new RegExp('^' + name + '$', 'i') });
     if (existingUser) {
-      return res.status(400).json({ error: 'Email is already registered.' });
+      return res.status(400).json({ error: 'Name is already taken.' });
     }
 
-    const user = await User.create({ name, email: email.toLowerCase(), password });
+    const user = await User.create({ name, email: `${name.toLowerCase().replace(/\s+/g, '')}@doceditor.com`, password });
+    
+    await History.create({
+      action: 'REGISTER',
+      userName: user.name,
+      details: `New account registered for ${user.name}`
+    });
+
     res.status(201).json({
       success: true,
       user: { id: user._id, name: user.name, email: user.email }
@@ -277,20 +296,36 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Please provide email and password.' });
+    const { name, password } = req.body;
+    if (!name || !password) {
+      return res.status(400).json({ error: 'Please provide name and password.' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase(), password });
+    const user = await User.findOne({ name: new RegExp('^' + name + '$', 'i'), password });
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'Invalid name or password.' });
     }
+
+    await History.create({
+      action: 'LOGIN',
+      userName: user.name,
+      details: `User ${user.name} logged in successfully.`
+    });
 
     res.json({
       success: true,
       user: { id: user._id, name: user.name, email: user.email }
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. History / Audit Log Endpoint
+app.get('/api/history', async (req, res) => {
+  try {
+    const logs = await History.find().sort({ timestamp: -1 }).limit(50);
+    res.json(logs);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
