@@ -25,7 +25,7 @@ export function App() {
   // Modals state
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(() => !currentUser);
 
   useEffect(() => {
     if (currentUser) {
@@ -201,9 +201,18 @@ export function App() {
       />
 
       <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={(user) => setCurrentUser(user)}
+        isOpen={isLoginModalOpen || !currentUser}
+        onClose={() => {
+          if (currentUser) {
+            setIsLoginModalOpen(false);
+          } else {
+            alert('Please sign in or register to access DocEditor.');
+          }
+        }}
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          setIsLoginModalOpen(false);
+        }}
       />
     </div>
   );
