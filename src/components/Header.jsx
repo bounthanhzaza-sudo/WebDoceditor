@@ -8,6 +8,7 @@ export function Header({
   onOpenSettings,
   onExport,
   onImport,
+  onImportSingleFile,
   onToggleMobileSidebar,
   currentUser,
   onOpenLogin,
@@ -15,17 +16,111 @@ export function Header({
 }) {
   const fileInputRef = React.useRef(null);
 
+  const escapeHtml = (str) => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result;
-      if (typeof content === 'string') {
-        onImport(content);
+
+    const fileName = file.name;
+    const fileType = file.type;
+    const fileExt = fileName.split('.').pop()?.toLowerCase();
+
+    // Helper to import as single document
+    const importAsDoc = (docData) => {
+      if (onImportSingleFile) {
+        onImportSingleFile(docData);
       }
     };
-    reader.readAsText(file);
+
+    // If it's JSON, check if it's a workspace backup
+    if (fileExt === 'json' || fileType === 'application/json') {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result;
+        if (typeof content === 'string') {
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed && Array.isArray(parsed.documents) && Array.isArray(parsed.categories)) {
+              onImport(content);
+              e.target.value = '';
+              return;
+            }
+          } catch {
+            // Not workspace JSON, treat as JSON code/data file
+          }
+          importAsDoc({
+            title: fileName.replace(/\.[^/.]+$/, ''),
+            badge: 'JSON',
+            badgeColor: 'purple',
+            description: `Imported JSON file: ${fileName}`,
+            content: `<h2>JSON File: ${fileName}</h2><pre><code>${escapeHtml(content)}</code></pre>`
+          });
+        }
+      };
+      reader.readAsText(file);
+    } else if (fileType.startsWith('image/')) {
+      // Image files
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result;
+        importAsDoc({
+          title: fileName.replace(/\.[^/.]+$/, ''),
+          badge: 'Image',
+          badgeColor: 'purple',
+          description: `Imported image: ${fileName} (${(file.size / 1024).toFixed(2)} KB)`,
+          content: `<h2>Image: ${fileName}</h2><p>Uploaded on ${new Date().toLocaleString()}</p><div style="margin: 20px 0; text-align: center;"><img src="${dataUrl}" alt="${fileName}" style="max-width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" /></div>`
+        });
+      };
+      reader.readAsDataURL(file);
+    } else if (['txt', 'md', 'html', 'js', 'jsx', 'ts', 'tsx', 'py', 'css', 'csv', 'xml', 'yml', 'yaml'].includes(fileExt || '')) {
+      // Text, Markdown, HTML, Code files
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const textContent = event.target?.result || '';
+        let formatted = '';
+        if (fileExt === 'md') {
+          formatted = `<h2>${fileName}</h2><p><em>Markdown File</em></p><pre><code>${escapeHtml(textContent)}</code></pre>`;
+        } else if (fileExt === 'html') {
+          formatted = textContent;
+        } else if (['js', 'jsx', 'ts', 'tsx', 'py', 'css', 'csv', 'xml', 'yml', 'yaml'].includes(fileExt || '')) {
+          formatted = `<h2>Code File: ${fileName}</h2><p>Language: <strong>${fileExt.toUpperCase()}</strong></p><pre><code>${escapeHtml(textContent)}</code></pre>`;
+        } else {
+          formatted = `<h2>${fileName}</h2><pre style="white-space: pre-wrap;">${escapeHtml(textContent)}</pre>`;
+        }
+
+        importAsDoc({
+          title: fileName.replace(/\.[^/.]+$/, ''),
+          badge: fileExt?.toUpperCase() || 'Text',
+          badgeColor: 'blue',
+          description: `Imported text/code file: ${fileName}`,
+          content: formatted
+        });
+      };
+      reader.readAsText(file);
+    } else {
+      // Any other binary/PDF/office/document file
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result;
+        importAsDoc({
+          title: fileName.replace(/\.[^/.]+$/, ''),
+          badge: 'File',
+          badgeColor: 'emerald',
+          description: `Imported file: ${fileName} (${(file.size / 1024).toFixed(2)} KB)`,
+          content: `<h2>File Attachment: ${fileName}</h2><p>Type: ${fileType || 'Unknown'} | Size: ${(file.size / 1024).toFixed(2)} KB</p><p>Successfully imported into DocEditor.</p><div style="margin-top: 16px;"><a href="${dataUrl}" download="${fileName}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; border-radius: 8px; text-decoration: none; font-weight: bold;">Download File (${fileName})</a></div>`
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+
     e.target.value = '';
   };
 
@@ -88,7 +183,6 @@ export function Header({
           type="file"
           ref={fileInputRef}
           onChange={handleFileChange}
-          accept=".json"
           className="hidden"
         />
 

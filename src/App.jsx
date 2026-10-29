@@ -150,6 +150,31 @@ export function App() {
     }
   };
 
+  const handleImportSingleFile = (fileDocData) => {
+    const newDoc = {
+      id: `doc-${Date.now()}`,
+      slug: `imported-${Date.now()}`,
+      title: fileDocData.title || 'Imported Document',
+      category: store.categories[0] || 'Getting Started',
+      order: 1,
+      badge: fileDocData.badge || 'Imported',
+      badgeColor: fileDocData.badgeColor || 'blue',
+      description: fileDocData.description || 'Imported file attachment',
+      readTime: '2 min read',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      author: currentUser?.name || 'User',
+      content: fileDocData.content || '<p>Imported content</p>'
+    };
+
+    setStore(prev => ({
+      ...prev,
+      documents: [newDoc, ...prev.documents]
+    }));
+    setActiveDocId(newDoc.id);
+    alert(`File "${newDoc.title}" imported successfully as a new document!`);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-neutral-100 font-sans">
       <Header
@@ -159,6 +184,7 @@ export function App() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onExport={handleExport}
         onImport={handleImport}
+        onImportSingleFile={handleImportSingleFile}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         currentUser={currentUser}
         onOpenLogin={() => setIsLoginModalOpen(true)}
