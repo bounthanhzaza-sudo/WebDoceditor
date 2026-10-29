@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Lock, User as UserIcon, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2, ShieldCheck } from 'lucide-react';
 
-const API_URL = 'http://13.212.27.144:5000';
+const API_URL = 'http://13.212.27.144:5000/api';
 
 export function LoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
