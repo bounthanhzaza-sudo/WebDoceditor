@@ -458,7 +458,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
               onPaste={handlePaste}
               className="flex-1 outline-none prose max-w-none text-neutral-800 leading-relaxed font-sans text-base focus:ring-0"
               style={{ minHeight: '900px' }}
-              placeholder="Start typing your document here... Drag, paste or insert pictures like Microsoft Word!"
+              placeholder="Start writing your document here..."
             />
           )}
         </div>

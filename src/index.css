@@ -6,6 +6,15 @@
   }
 }
 
+/* ContentEditable Placeholder Support */
+[contenteditable]:empty:before {
+  content: attr(placeholder);
+  color: #9ca3af;
+  cursor: text;
+  pointer-events: none;
+  display: block;
+}
+
 /* Custom styling for documentation content */
 .prose h2 {
   font-size: 1.5rem;
