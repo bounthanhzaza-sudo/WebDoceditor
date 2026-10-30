@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RibbonToolbar } from './RibbonToolbar';
-import { Printer, Trash2, Download, Check, Edit3, Eye, User, Calendar, Folder, AlignLeft, AlignCenter, AlignRight, Maximize2, Trash, Sparkles } from 'lucide-react';
+import { Printer, Trash2, Download, Check, Edit3, Eye, User, Calendar, Folder, AlignLeft, AlignCenter, AlignRight, Maximize2, Trash, Sparkles, Move } from 'lucide-react';
 
 export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   const [title, setTitle] = useState(doc?.title || '');
@@ -22,8 +22,49 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
       }
       calculateWordCount(doc.content || '');
       setSelectedImg(null);
+      setTimeout(() => attachDragListeners(), 100);
     }
   }, [doc?.id]);
+
+  useEffect(() => {
+    if (mode === 'edit') {
+      setTimeout(() => attachDragListeners(), 100);
+    }
+  }, [mode]);
+
+  const attachDragListeners = () => {
+    if (!editorRef.current) return;
+    const floatingImages = editorRef.current.querySelectorAll('.floating-image');
+    floatingImages.forEach(wrapper => {
+      wrapper.onmousedown = (e) => {
+        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+        e.stopPropagation();
+        const imgTarget = wrapper.querySelector('img') || wrapper;
+        setSelectedImg(imgTarget);
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = wrapper.offsetLeft;
+        const startTop = wrapper.offsetTop;
+
+        const onMouseMove = (moveEvent) => {
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          wrapper.style.left = `${Math.max(0, startLeft + dx)}px`;
+          wrapper.style.top = `${Math.max(0, startTop + dy)}px`;
+        };
+
+        const onMouseUp = () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          handleContentInput();
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      };
+    });
+  };
 
   const calculateWordCount = (htmlText) => {
     const text = htmlText ? htmlText.replace(/<[^>]*>/g, ' ').trim() : '';
@@ -63,7 +104,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
     onUpdateDoc(updatedDoc);
   };
 
-  // Microsoft Word-style Image Insertion & Handling
+  // Free-Positioning Image Insertion (Anywhere on paper)
   const handleInsertImage = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -72,30 +113,25 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
     input.onchange = (e) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file, index) => {
         const reader = new FileReader();
         reader.onload = (event) => {
           const base64 = event.target.result;
-          const imgHtml = `<img src="${base64}" alt="${file.name}" class="doc-image max-w-full rounded-lg shadow-md my-4 cursor-pointer inline-block" style="max-height: 500px; width: 100%; object-fit: contain;" />`;
+          const randomTop = 150 + (index * 60) + (Math.random() * 50);
+          const randomLeft = 80 + (index * 40);
+          const imgHtml = `<div class="floating-image absolute cursor-move select-none group" style="position: absolute; left: ${randomLeft}px; top: ${randomTop}px; width: 300px; z-index: 25;" contenteditable="false">
+            <img src="${base64}" alt="${file.name}" class="w-full h-auto rounded-xl shadow-xl border-2 border-blue-500/60 hover:border-blue-600 transition bg-white p-1" />
+            <div class="absolute -top-3 right-0 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition shadow flex items-center space-x-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+              <span>Free Move</span>
+            </div>
+          </div>`;
+
           if (editorRef.current) {
             editorRef.current.focus();
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              range.deleteContents();
-              const div = document.createElement('div');
-              div.innerHTML = imgHtml;
-              const frag = document.createDocumentFragment();
-              let node;
-              while ((node = div.firstChild)) {
-                frag.appendChild(node);
-              }
-              range.insertNode(frag);
-              range.collapse(false);
-            } else {
-              editorRef.current.innerHTML += imgHtml;
-            }
+            editorRef.current.innerHTML += imgHtml;
             handleContentInput();
+            setTimeout(() => attachDragListeners(), 50);
           }
         };
         reader.readAsDataURL(file);
@@ -108,16 +144,26 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
     e.preventDefault();
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file) => {
         if (file.type.startsWith('image/')) {
           const reader = new FileReader();
           reader.onload = (event) => {
             const base64 = event.target.result;
-            const imgHtml = `<img src="${base64}" alt="${file.name}" class="doc-image max-w-full rounded-lg shadow-md my-4 cursor-pointer inline-block" style="max-height: 500px; width: 100%; object-fit: contain;" />`;
+            const rect = editorRef.current.getBoundingClientRect();
+            const dropX = Math.max(20, e.clientX - rect.left - 150);
+            const dropY = Math.max(20, e.clientY - rect.top - 100);
+
+            const imgHtml = `<div class="floating-image absolute cursor-move select-none group" style="position: absolute; left: ${dropX}px; top: ${dropY}px; width: 300px; z-index: 25;" contenteditable="false">
+              <img src="${base64}" alt="${file.name}" class="w-full h-auto rounded-xl shadow-xl border-2 border-blue-500/60 hover:border-blue-600 transition bg-white p-1" />
+              <div class="absolute -top-3 right-0 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition shadow flex items-center space-x-1">
+                <span>Free Move</span>
+              </div>
+            </div>`;
+
             if (editorRef.current) {
-              editorRef.current.focus();
-              document.execCommand('insertHTML', false, imgHtml);
+              editorRef.current.innerHTML += imgHtml;
               handleContentInput();
+              setTimeout(() => attachDragListeners(), 50);
             }
           };
           reader.readAsDataURL(file);
@@ -141,11 +187,16 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
           const reader = new FileReader();
           reader.onload = (event) => {
             const base64 = event.target.result;
-            const imgHtml = `<img src="${base64}" alt="Pasted Image" class="doc-image max-w-full rounded-lg shadow-md my-4 cursor-pointer inline-block" style="max-height: 500px; width: 100%; object-fit: contain;" />`;
+            const imgHtml = `<div class="floating-image absolute cursor-move select-none group" style="position: absolute; left: 100px; top: 200px; width: 300px; z-index: 25;" contenteditable="false">
+              <img src="${base64}" alt="Pasted Image" class="w-full h-auto rounded-xl shadow-xl border-2 border-blue-500/60 hover:border-blue-600 transition bg-white p-1" />
+              <div class="absolute -top-3 right-0 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition shadow">Free Move</div>
+            </div>`;
+
             if (editorRef.current) {
               editorRef.current.focus();
-              document.execCommand('insertHTML', false, imgHtml);
+              editorRef.current.innerHTML += imgHtml;
               handleContentInput();
+              setTimeout(() => attachDragListeners(), 50);
             }
           };
           reader.readAsDataURL(file);
@@ -155,8 +206,9 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   };
 
   const handleEditorClick = (e) => {
-    if (e.target && e.target.tagName === 'IMG') {
-      setSelectedImg(e.target);
+    const imgWrapper = e.target.closest('.floating-image') || (e.target.tagName === 'IMG' ? e.target.closest('div') : null);
+    if (imgWrapper && imgWrapper.classList.contains('floating-image')) {
+      setSelectedImg(imgWrapper.querySelector('img') || imgWrapper);
     } else if (!e.target.closest('.image-format-toolbar')) {
       setSelectedImg(null);
     }
@@ -165,37 +217,28 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   // Image Formatting Actions (Word Style)
   const setImageStyle = (styleProp, value) => {
     if (!selectedImg) return;
-    selectedImg.style[styleProp] = value;
+    const wrapper = selectedImg.closest('.floating-image') || selectedImg;
+    wrapper.style[styleProp] = value;
     handleContentInput();
   };
 
-  const setImageAlignment = (align) => {
+  const setImageSize = (widthPx) => {
     if (!selectedImg) return;
-    if (align === 'left') {
-      selectedImg.style.display = 'block';
-      selectedImg.style.marginLeft = '0';
-      selectedImg.style.marginRight = 'auto';
-    } else if (align === 'center') {
-      selectedImg.style.display = 'block';
-      selectedImg.style.marginLeft = 'auto';
-      selectedImg.style.marginRight = 'auto';
-    } else if (align === 'right') {
-      selectedImg.style.display = 'block';
-      selectedImg.style.marginLeft = 'auto';
-      selectedImg.style.marginRight = '0';
+    const wrapper = selectedImg.closest('.floating-image');
+    if (wrapper) {
+      wrapper.style.width = widthPx;
     }
-    handleContentInput();
-  };
-
-  const setImageSize = (widthPercent) => {
-    if (!selectedImg) return;
-    selectedImg.style.width = widthPercent;
     handleContentInput();
   };
 
   const handleDeleteSelectedImage = () => {
     if (!selectedImg) return;
-    selectedImg.remove();
+    const wrapper = selectedImg.closest('.floating-image');
+    if (wrapper) {
+      wrapper.remove();
+    } else {
+      selectedImg.remove();
+    }
     setSelectedImg(null);
     handleContentInput();
   };
@@ -217,7 +260,8 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
   th { background-color: #f4f4f4; }
   blockquote { border-left: 4px solid #3b82f6; margin: 20px 0; padding-left: 16px; color: #555; }
-  img { max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0; }
+  .floating-image { position: absolute; }
+  img { max-width: 100%; height: auto; border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -358,38 +402,23 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
         <div className="image-format-toolbar bg-neutral-900 text-white px-4 py-2 rounded-xl shadow-2xl flex flex-wrap items-center gap-3 absolute top-28 left-1/2 transform -translate-x-1/2 z-40 border border-neutral-700 animate-fade-in text-xs">
           <div className="flex items-center space-x-1.5 text-blue-400 font-semibold border-r border-neutral-700 pr-3">
             <Sparkles className="w-4 h-4" />
-            <span>Picture Tools</span>
+            <span>Free Image Tools</span>
           </div>
 
-          {/* Alignment */}
-          <div className="flex items-center space-x-1 border-r border-neutral-700 pr-3">
-            <span className="text-neutral-400 text-[10px] uppercase">Align:</span>
-            <button onClick={() => setImageAlignment('left')} className="p-1 hover:bg-neutral-800 rounded text-neutral-200" title="Align Left">
-              <AlignLeft className="w-4 h-4" />
-            </button>
-            <button onClick={() => setImageAlignment('center')} className="p-1 hover:bg-neutral-800 rounded text-neutral-200" title="Align Center">
-              <AlignCenter className="w-4 h-4" />
-            </button>
-            <button onClick={() => setImageAlignment('right')} className="p-1 hover:bg-neutral-800 rounded text-neutral-200" title="Align Right">
-              <AlignRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Size */}
+          {/* Size Presets */}
           <div className="flex items-center space-x-1 border-r border-neutral-700 pr-3">
             <span className="text-neutral-400 text-[10px] uppercase">Size:</span>
-            <button onClick={() => setImageSize('25%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">25%</button>
-            <button onClick={() => setImageSize('50%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">50%</button>
-            <button onClick={() => setImageSize('75%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">75%</button>
-            <button onClick={() => setImageSize('100%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">100%</button>
+            <button onClick={() => setImageSize('200px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">Small</button>
+            <button onClick={() => setImageSize('350px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">Medium</button>
+            <button onClick={() => setImageSize('550px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">Large</button>
           </div>
 
           {/* Effects */}
           <div className="flex items-center space-x-1 border-r border-neutral-700 pr-3">
             <span className="text-neutral-400 text-[10px] uppercase">Style:</span>
             <button onClick={() => setImageStyle('borderRadius', '0px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Square</button>
-            <button onClick={() => setImageStyle('borderRadius', '12px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Rounded</button>
-            <button onClick={() => setImageStyle('boxShadow', '0 10px 25px -5px rgba(0,0,0,0.3)')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Shadow</button>
+            <button onClick={() => setImageStyle('borderRadius', '16px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Rounded</button>
+            <button onClick={() => setImageStyle('boxShadow', '0 20px 25px -5px rgba(0,0,0,0.3)')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Shadow</button>
           </div>
 
           {/* Delete */}
@@ -406,7 +435,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
 
       {/* A4 Paper Canvas Container */}
       <div className="flex-1 overflow-y-auto p-6 lg:p-12 flex justify-center bg-neutral-200/70">
-        <div className="w-full max-w-[850px] min-h-[1100px] bg-white shadow-xl rounded-sm p-12 lg:p-16 border border-neutral-300 flex flex-col focus:outline-none">
+        <div className="w-full max-w-[850px] min-h-[1100px] bg-white shadow-xl rounded-sm p-12 lg:p-16 border border-neutral-300 flex flex-col focus:outline-none relative">
           {mode === 'preview' ? (
             /* Reader Preview Mode */
             <div className="space-y-6">
@@ -442,7 +471,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
               </div>
 
               <div
-                className="prose max-w-none text-neutral-800 leading-relaxed font-sans text-base"
+                className="prose max-w-none text-neutral-800 leading-relaxed font-sans text-base relative"
                 dangerouslySetInnerHTML={{ __html: doc.content }}
               />
             </div>
@@ -456,7 +485,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onPaste={handlePaste}
-              className="flex-1 outline-none prose max-w-none text-neutral-800 leading-relaxed font-sans text-base focus:ring-0"
+              className="flex-1 outline-none prose max-w-none text-neutral-800 leading-relaxed font-sans text-base focus:ring-0 relative"
               style={{ minHeight: '900px' }}
               placeholder="Start writing your document here..."
             />
