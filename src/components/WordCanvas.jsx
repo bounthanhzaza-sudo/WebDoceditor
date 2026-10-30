@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RibbonToolbar } from './RibbonToolbar';
-import { Printer, Trash2, Download, Check, Edit3, Eye, User, Calendar, Folder } from 'lucide-react';
+import { Printer, Trash2, Download, Check, Edit3, Eye, User, Calendar, Folder, AlignLeft, AlignCenter, AlignRight, Maximize2, Trash, Sparkles } from 'lucide-react';
 
 export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   const [title, setTitle] = useState(doc?.title || '');
@@ -10,6 +10,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   const editorRef = useRef(null);
   const [savedStatus, setSavedStatus] = useState('Saved');
   const [wordCount, setWordCount] = useState(0);
+  const [selectedImg, setSelectedImg] = useState(null);
 
   useEffect(() => {
     if (doc) {
@@ -20,6 +21,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
         editorRef.current.innerHTML = doc.content || '';
       }
       calculateWordCount(doc.content || '');
+      setSelectedImg(null);
     }
   }, [doc?.id]);
 
@@ -61,6 +63,143 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
     onUpdateDoc(updatedDoc);
   };
 
+  // Microsoft Word-style Image Insertion & Handling
+  const handleInsertImage = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64 = event.target.result;
+          const imgHtml = `<img src="${base64}" alt="${file.name}" class="doc-image max-w-full rounded-lg shadow-md my-4 cursor-pointer inline-block" style="max-height: 500px; width: 100%; object-fit: contain;" />`;
+          if (editorRef.current) {
+            editorRef.current.focus();
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              range.deleteContents();
+              const div = document.createElement('div');
+              div.innerHTML = imgHtml;
+              const frag = document.createDocumentFragment();
+              let node;
+              while ((node = div.firstChild)) {
+                frag.appendChild(node);
+              }
+              range.insertNode(frag);
+              range.collapse(false);
+            } else {
+              editorRef.current.innerHTML += imgHtml;
+            }
+            handleContentInput();
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+    input.click();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      Array.from(files).forEach(file => {
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target.result;
+            const imgHtml = `<img src="${base64}" alt="${file.name}" class="doc-image max-w-full rounded-lg shadow-md my-4 cursor-pointer inline-block" style="max-height: 500px; width: 100%; object-fit: contain;" />`;
+            if (editorRef.current) {
+              editorRef.current.focus();
+              document.execCommand('insertHTML', false, imgHtml);
+              handleContentInput();
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target.result;
+            const imgHtml = `<img src="${base64}" alt="Pasted Image" class="doc-image max-w-full rounded-lg shadow-md my-4 cursor-pointer inline-block" style="max-height: 500px; width: 100%; object-fit: contain;" />`;
+            if (editorRef.current) {
+              editorRef.current.focus();
+              document.execCommand('insertHTML', false, imgHtml);
+              handleContentInput();
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
+  };
+
+  const handleEditorClick = (e) => {
+    if (e.target && e.target.tagName === 'IMG') {
+      setSelectedImg(e.target);
+    } else if (!e.target.closest('.image-format-toolbar')) {
+      setSelectedImg(null);
+    }
+  };
+
+  // Image Formatting Actions (Word Style)
+  const setImageStyle = (styleProp, value) => {
+    if (!selectedImg) return;
+    selectedImg.style[styleProp] = value;
+    handleContentInput();
+  };
+
+  const setImageAlignment = (align) => {
+    if (!selectedImg) return;
+    if (align === 'left') {
+      selectedImg.style.display = 'block';
+      selectedImg.style.marginLeft = '0';
+      selectedImg.style.marginRight = 'auto';
+    } else if (align === 'center') {
+      selectedImg.style.display = 'block';
+      selectedImg.style.marginLeft = 'auto';
+      selectedImg.style.marginRight = 'auto';
+    } else if (align === 'right') {
+      selectedImg.style.display = 'block';
+      selectedImg.style.marginLeft = 'auto';
+      selectedImg.style.marginRight = '0';
+    }
+    handleContentInput();
+  };
+
+  const setImageSize = (widthPercent) => {
+    if (!selectedImg) return;
+    selectedImg.style.width = widthPercent;
+    handleContentInput();
+  };
+
+  const handleDeleteSelectedImage = () => {
+    if (!selectedImg) return;
+    selectedImg.remove();
+    setSelectedImg(null);
+    handleContentInput();
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -78,6 +217,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
   th { background-color: #f4f4f4; }
   blockquote { border-left: 4px solid #3b82f6; margin: 20px 0; padding-left: 16px; color: #555; }
+  img { max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0; }
 </style>
 </head>
 <body>
@@ -114,7 +254,7 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-neutral-100 overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-neutral-100 overflow-hidden relative">
       {/* Top Document Toolbar / Action Bar */}
       <div className="bg-white border-b border-neutral-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
@@ -211,7 +351,58 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
       </div>
 
       {/* Microsoft Word Style Ribbon Toolbar (Only shown in Edit Mode) */}
-      {mode === 'edit' && <RibbonToolbar />}
+      {mode === 'edit' && <RibbonToolbar onInsertImage={handleInsertImage} />}
+
+      {/* Microsoft Word Style Floating Picture Format Toolbar */}
+      {mode === 'edit' && selectedImg && (
+        <div className="image-format-toolbar bg-neutral-900 text-white px-4 py-2 rounded-xl shadow-2xl flex flex-wrap items-center gap-3 absolute top-28 left-1/2 transform -translate-x-1/2 z-40 border border-neutral-700 animate-fade-in text-xs">
+          <div className="flex items-center space-x-1.5 text-blue-400 font-semibold border-r border-neutral-700 pr-3">
+            <Sparkles className="w-4 h-4" />
+            <span>Picture Tools</span>
+          </div>
+
+          {/* Alignment */}
+          <div className="flex items-center space-x-1 border-r border-neutral-700 pr-3">
+            <span className="text-neutral-400 text-[10px] uppercase">Align:</span>
+            <button onClick={() => setImageAlignment('left')} className="p-1 hover:bg-neutral-800 rounded text-neutral-200" title="Align Left">
+              <AlignLeft className="w-4 h-4" />
+            </button>
+            <button onClick={() => setImageAlignment('center')} className="p-1 hover:bg-neutral-800 rounded text-neutral-200" title="Align Center">
+              <AlignCenter className="w-4 h-4" />
+            </button>
+            <button onClick={() => setImageAlignment('right')} className="p-1 hover:bg-neutral-800 rounded text-neutral-200" title="Align Right">
+              <AlignRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Size */}
+          <div className="flex items-center space-x-1 border-r border-neutral-700 pr-3">
+            <span className="text-neutral-400 text-[10px] uppercase">Size:</span>
+            <button onClick={() => setImageSize('25%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">25%</button>
+            <button onClick={() => setImageSize('50%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">50%</button>
+            <button onClick={() => setImageSize('75%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">75%</button>
+            <button onClick={() => setImageSize('100%')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded font-medium">100%</button>
+          </div>
+
+          {/* Effects */}
+          <div className="flex items-center space-x-1 border-r border-neutral-700 pr-3">
+            <span className="text-neutral-400 text-[10px] uppercase">Style:</span>
+            <button onClick={() => setImageStyle('borderRadius', '0px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Square</button>
+            <button onClick={() => setImageStyle('borderRadius', '12px')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Rounded</button>
+            <button onClick={() => setImageStyle('boxShadow', '0 10px 25px -5px rgba(0,0,0,0.3)')} className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded">Shadow</button>
+          </div>
+
+          {/* Delete */}
+          <button
+            onClick={handleDeleteSelectedImage}
+            className="flex items-center space-x-1 px-2.5 py-1 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition font-medium"
+            title="Delete Picture"
+          >
+            <Trash className="w-3.5 h-3.5" />
+            <span>Remove</span>
+          </button>
+        </div>
+      )}
 
       {/* A4 Paper Canvas Container */}
       <div className="flex-1 overflow-y-auto p-6 lg:p-12 flex justify-center bg-neutral-200/70">
@@ -261,9 +452,13 @@ export function WordCanvas({ doc, onUpdateDoc, onDeleteDoc, categories }) {
               ref={editorRef}
               contentEditable
               onInput={handleContentInput}
+              onClick={handleEditorClick}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onPaste={handlePaste}
               className="flex-1 outline-none prose max-w-none text-neutral-800 leading-relaxed font-sans text-base focus:ring-0"
               style={{ minHeight: '900px' }}
-              placeholder="Start typing your document here..."
+              placeholder="Start typing your document here... Drag, paste or insert pictures like Microsoft Word!"
             />
           )}
         </div>

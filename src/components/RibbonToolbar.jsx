@@ -20,10 +20,11 @@ import {
   Quote,
   Table,
   Palette,
-  Highlighter
+  Highlighter,
+  Image as ImageIcon
 } from 'lucide-react';
 
-export function RibbonToolbar({ onFormat }) {
+export function RibbonToolbar({ onFormat, onInsertImage }) {
   const format = (command, value = null) => {
     document.execCommand(command, false, value);
   };
@@ -207,6 +208,15 @@ export function RibbonToolbar({ onFormat }) {
 
       {/* Insert Elements */}
       <div className="flex items-center space-x-1">
+        <button
+          type="button"
+          onClick={onInsertImage}
+          title="Insert Picture (Upload, Paste, Drag & Drop)"
+          className="p-1.5 hover:bg-neutral-100 rounded text-neutral-700 transition flex items-center space-x-1 bg-blue-50 text-blue-600 border border-blue-200"
+        >
+          <ImageIcon className="w-4 h-4" />
+          <span className="text-xs font-semibold">Picture</span>
+        </button>
         <button
           type="button"
           onClick={() => format('insertHorizontalRule')}
