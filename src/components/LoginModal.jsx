@@ -50,6 +50,12 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Backend server error (Status ${res.status}). The API at ${API_URL} returned HTML instead of JSON. Please ensure the backend server is running.`);
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
